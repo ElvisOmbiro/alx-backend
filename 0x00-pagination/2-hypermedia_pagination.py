@@ -1,11 +1,28 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Deletion-resilient hypermedia pagination
+Implement a get_hyper method that takes the same arguments (and defaults) 
+as get_page and returns a dictionary containing the following key-value pairs:
 """
-
+from typing import Tuple, List, Dict
 import csv
 import math
-from typing import List, Dict
+
+
+def index_range(page: int, page_size: int) -> Tuple:
+    """
+    Returns start and end index for pagination
+
+    Args:
+        page (int): page number
+        page_size (int): page size
+
+    Returns:
+        Tuple: start and end index
+    """
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    return (start_index, end_index)
 
 
 class Server:
@@ -16,11 +33,9 @@ class Server:
 
     def __init__(self):
         self.__dataset = None
-        self.__indexed_dataset = None
 
     def dataset(self) -> List[List]:
-        """
-        Cached dataset
+        """Cached dataset
         """
         if self.__dataset is None:
             with open(self.DATA_FILE) as f:
@@ -30,49 +45,60 @@ class Server:
 
         return self.__dataset
 
-    def indexed_dataset(self) -> Dict[int, List]:
+    def get_page(self, page: int = 1, page_size: int = 10) -> List[List]:
         """
-        Dataset indexed by sorting position, starting at 0
-        """
-        if self.__indexed_dataset is None:
-            dataset = self.dataset()
-            truncated_dataset = dataset[:1000]
-            self.__indexed_dataset = {
-                i: dataset[i] for i in range(len(dataset))
-            }
-        return self.__indexed_dataset
-
-    def get_hyper_index(self, index: int = None, page_size: int = 10) -> Dict:
-        """
-        Return the hypermedia pagination
+        Get page of dataset
 
         Args:
-            index (int): the index of the page
-            page_size (int): the size of the page
+            page (int): page number
+            page_size (int): page size
 
         Returns:
-            Dict: the hypermedia pagination
+            List[List]: dataset
         """
-        if index is None:
-            index = 0
-
-        assert isinstance(index, int)
-        assert 0 <= index < len(self.indexed_dataset())
+        assert isinstance(page, int) and page > 0
         assert isinstance(page_size, int) and page_size > 0
 
-        data = []
-        next_index = index + page_size
+        dataset = self.dataset()
 
-        for i in range(index, next_index):
-            if self.indexed_dataset().get(i):
-                data.append(self.indexed_dataset()[i])
-            else:
-                i += 1
-                next_index += 1
+        try:
+            start_index, end_index = index_range(page, page_size)
+            return dataset[start_index:end_index]
+        except IndexError:
+            return []
+
+    def get_hyper(self, page: int = 1, page_size: int = 10) -> Dict:
+        """
+        Get hyper of dataset
+
+        Args:
+            page (int): page number
+            page_size (int): page size
+
+        Returns:
+            Dict: hyper
+        """
+        assert isinstance(page, int) and page > 0
+        assert isinstance(page_size, int) and page_size > 0
+
+        dataset = self.get_page(page, page_size)
+        total_pages = math.ceil(len(self.dataset()) / page_size)
+
+        if page < total_pages:
+            next_page = page + 1
+        else:
+            next_page = None
+
+        if page == 1:
+            prev_page = None
+        else:
+            prev_page = page - 1
 
         return {
-            "index": index,
-            "data": data,
-            "page_size": page_size,
-            "next_index": next_index
+            "page_size": len(dataset),
+            "page": page,
+            "data": dataset,
+            "next_page": next_page,
+            "prev_page": prev_page,
+            "total_pages": total_pages
             }
